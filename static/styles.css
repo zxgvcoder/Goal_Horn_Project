@@ -7,19 +7,14 @@ body {
     text-align: center;
     justify-content: center;
     align-items: center;
-    background: linear-gradient(
-        135deg,
-        #000000 0%,
-        f8f6f0 40%,
-        f1e6c8 100%
-    );
+    background: black;
 
     font-family: "Inter", "Segoe UI", sans-serif;
     color: var(--text-dark);
 }
 
 :root {
-    --white: #ffffff;
+    --black: #000000;
     --off-white: #f9f9f9;
     --gold: #d4af37;
     --soft-gold: #f2d675;
