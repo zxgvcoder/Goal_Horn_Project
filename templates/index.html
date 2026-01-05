@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Goal Horn</title>
+    <link rel="stylesheet" href="../static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>REAL MADRID C.F.</h1>
+        <h1>Goal Horn Simulator</h1>
+        <button id="play"><h2>GOAL!!!</h2></button>
+        <button id="stop"><h2>No Goal</h2></button>
+
+        <div class="volume-control">
+            <label for="volume">
+                Volume: <span id="volume-value">75%</span>
+            </label>
+            
+            <input type="range" id="volume" min="0" max="1" step="0.05" value="0.7">
+        </div>
+
+        <audio id="horn" src="../static/horn.mp3"></audio>
+
+        <div class="durations">
+            <label>Blast Durations (seconds)</label>
+
+            <div id="duration-list" class="duration-inputs">
+                <input type="number" id="d1" value="4" min="1" step="1">
+                <input type="number" id="d2" value="4" min="1" step="1">
+                <input type="number" id="d3" value="6" min="1" step="1">
+            </div>
+
+            <button id="add-blast">Blast +</button>
+            <button id="remove-blast">Blast -</button>
+
+            <div class="presets">
+                <button data-preset="home">Normal Goal</button>
+                <button data-preset="away">Penalty Goal</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        const horn = document.getElementById("horn");
+        const volume = document.getElementById("volume");
+        const volumeValue = document.getElementById("volume-value");
+        const durationList = document.getElementById("duration-list");
+        const addBlastBtn = document.getElementById("add-blast");
+        const removeBlastBtn = document.getElementById("remove-blast");
+        const container = document.querySelector(".container");
+        let stopFlag = false;
+
+        function showGoalFlash() {
+            const flash = document.getElementById("goal-flash");
+            flash.classList.remove("show"); // reset animation
+            void flash.offsetWidth;// force reflow
+            flash.classList.add("show");
+        }
+
+
+        // Read durations dynamically
+        function getDurations() {
+            return [...durationList.querySelectorAll("input")]
+                .map(input => Number(input.value))
+                .filter(d => d > 0);
+        }
+
+        // Save durations
+        function saveDurations() {
+            localStorage.setItem(
+                "durations",
+                JSON.stringify(getDurations())
+            );
+        }
+
+        // Load durations
+        function loadDurations() {
+            const saved = localStorage.getItem("durations");
+            if (!saved) return;
+
+            durationList.innerHTML = "";
+            JSON.parse(saved).forEach(d => addDurationInput(d));
+        }
+
+        // Add input field
+        function addDurationInput(value = 3) {
+            const input = document.createElement("input");
+            input.type = "number";
+            input.min = 1;
+            input.step = 0.5;
+            input.value = value;
+
+            input.addEventListener("input", saveDurations);
+            durationList.appendChild(input);
+        }
+
+        addBlastBtn.addEventListener("click", () => {
+            addDurationInput(3);
+            saveDurations();
+            loadDurations();
+        });
+
+        removeBlastBtn.addEventListener("click", () => {
+            const inputs = durationList.querySelectorAll("input");
+            if (inputs.length > 1) {  // keep at least one blast
+                durationList.removeChild(inputs[inputs.length - 1]);
+                saveDurations();
+            }
+        });
+
+        document.querySelectorAll(".presets button").forEach(btn => {
+            btn.addEventListener("click", () => {
+                let preset = [];
+
+                if (btn.dataset.preset === "home") {
+                    preset = [4, 4, 6];
+                }
+                else if (btn.dataset.preset === "away") {
+                    preset = [5];
+                }
+
+                durationList.innerHTML = "";
+                preset.forEach(d => addDurationInput(d));
+                saveDurations();
+            });
+        });
+
+        // Load saved volume (if exists)
+        const savedVolume = localStorage.getItem("volume");
+        if (savedVolume !== null) {
+            volume.value = savedVolume;
+            horn.volume = Number(savedVolume);
+            horn.volume = Number(volume.value);
+            volumeValue.textContent = `${Math.round(savedVolume * 100)}%`;
+        } else {
+            horn.volume = Number(volume.value);
+        }
+
+        // Update volume live + save
+        volume.addEventListener("input", () => {
+            const v = Number(volume.value);
+            horn.volume = v;
+            volumeValue.textContent = `${Math.round(v * 100)}%`;
+            localStorage.setItem("volume", v);
+        });
+
+        document.getElementById("play").addEventListener("click", () => {
+        horn.volume = Number(volume.value); // add THIS line
+
+        horn.currentTime = 0;
+        showGoalFlash();
+        horn.play()
+            .then(() => console.log("Audio playing"))
+            .catch(err => console.error("Audio error:", err));
+        });
+
+        let fadeInterval = null;
+
+        function fadeOut(audio, duration = 300) {
+            if (fadeInterval) {
+                clearInterval(fadeInterval);
+                fadeInterval = null;
+            }
+
+            const steps = 15;
+            const stepTime = duration / steps;
+            const startVolume = audio.volume;
+            let step = 0;
+
+            fadeInterval = setInterval(() => {
+                step++;
+                audio.volume = Math.max(0, startVolume * (1 - step / steps));
+
+                if (step >= steps) {
+                    clearInterval(fadeInterval);
+                    fadeInterval = null;
+                    audio.pause();
+                    audio.volume = startVolume; // restore volume
+                }
+            }, stepTime);
+        }
+
+        document.getElementById("play").addEventListener("click", () => {
+            stopFlag = false;
+
+            const sequence = getDurations();
+            let delay = 0;
+
+            if (sequence.length === 0) {
+                alert("Please enter at least one duration");
+                return;
+            }
+
+            sequence.forEach(duration => {
+                setTimeout(() => {
+                    if (stopFlag) return;
+
+                    // Stop any active fade from previous blast
+                    if (fadeInterval) {
+                        clearInterval(fadeInterval);
+                        fadeInterval = null;
+                    }
+
+                    horn.volume = Number(volume.value); // restore correct volume
+                    horn.currentTime = 0;
+                    horn.play()
+                        .then(() => console.log("Horn playing"))
+                        .catch(err => console.error("Audio error:", err));
+
+                    container.classList.add("glow");
+
+                    setTimeout(() => {
+                        fadeOut(horn, 700);
+                        container.classList.remove("glow");
+                    }, duration * 1000);
+
+                }, delay * 1000);
+
+                delay += duration + 1;
+            });
+        });
+
+        document.getElementById("stop").addEventListener("click", () => {
+            stopFlag = true;
+            fadeOut(horn, 200);
+            container.classList.remove("glow");
+        });
+    </script>
+</body>
+</html>
